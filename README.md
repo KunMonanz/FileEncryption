@@ -60,11 +60,13 @@ pip install -r requirements.txt
 ### 3. Set environment variables
 
 ```python
-SECRET_KEY=your_jwt_secret_key_here #in auth.py
+SECRET_KEY=your_jwt_secret_key_here
 ```
+You can generate a secret key with `FileEncryption/generate_jwt_secret_key.py`
 
 ### 4. Run the API
 
 ```bash
 uvicorn main:app --reload
 ```
+
