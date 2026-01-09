@@ -2,7 +2,7 @@ import uuid
 from models.user_model import User
 from sqlalchemy.orm import Session
 from encryption import verify_password, password_hash
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 
 def create_user(
@@ -90,6 +90,15 @@ def change_password_crud(
         user.encrypted_private_key = new_encrypted_private_key  # type: ignore
         user.private_key_nonce = new_private_key_nonce  # type: ignore
         user.private_key_tag = new_tag  # type: ignore
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Exception: {e}")
+
+
+def update_login_time(user: User, db: Session) -> None:
+    try:
+        user.last_login_at = func.now()
         db.commit()
     except Exception as e:
         db.rollback()

@@ -17,7 +17,8 @@ from crud.users_crud import (
     change_password_crud,
     create_user,
     search_for_user_username,
-    compare_user_password
+    compare_user_password,
+    update_login_time
 )
 
 from encryption import password_hash
@@ -114,6 +115,8 @@ def login(
         role=user.role  # type: ignore
     )
 
+    update_login_time(user, db)
+
     return {
         "message": f"Welcome back {user.username}",
         "access_token": token,
@@ -127,6 +130,7 @@ def private_key_decryption(
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
+
     user = search_for_user_username(current_user["username"], db)
     if not user:
         raise HTTPException(detail=USER_DOES_NOT_EXIST, status_code=422)

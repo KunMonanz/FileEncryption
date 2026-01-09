@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.file_model import File
@@ -11,7 +12,8 @@ def upload_file_crud(
     ciphertext: bytes,
     owner_id: str,
     db: Session,
-    content_type: str | None = None
+    content_type: str | None = None,
+    size: int = 0
 ):
     try:
         file = File(
@@ -21,7 +23,8 @@ def upload_file_crud(
             nonce=aes_nonce,
             tag=tag,
             owner_id=owner_id,
-            content_type=content_type
+            content_type=content_type,
+            size=size
         )
         db.add(file)
         db.commit()
@@ -42,3 +45,12 @@ def get_file_by_id(file_id: str, db: Session) -> File | None:
 def get_files_by_owner_id(owner_id: str, db: Session) -> list[File]:
     files = db.query(File).filter_by(owner_id=owner_id).all()
     return files
+
+
+def update_file_last_decrypted_at(file: File, db: Session) -> None:
+    try:
+        file.last_decrypted_at = func.now()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Exception: {e}")

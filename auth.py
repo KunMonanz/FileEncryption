@@ -1,5 +1,5 @@
+from fastapi import Depends, HTTPException, status
 from datetime import datetime
-from fastapi import Depends
 import jwt
 import os
 from pwdlib import PasswordHash
@@ -27,21 +27,33 @@ def create_access_token(username: str, role: str):
     return jwt.encode(payload, SECRET_KEY, ALGORITHM)  # type: ignore
 
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
 def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
     try:
-        payload = jwt.decode(token,
-                             SECRET_KEY,  # type: ignore
-                             algorithms=[
-                                 ALGORITHM
-                             ]
-                             )
-        username: str = payload.get("user")
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"verify_exp": True}
+        )
+        username: str | None = payload.get("user")
         role = payload.get("role")
+
         if username is None:
-            return None
+            raise credentials_exception
+
         return {
             "username": username,
             "role": role
         }
+
     except jwt.PyJWTError:
-        return None
+        raise credentials_exception

@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column,
+    Integer,
     String,
     LargeBinary,
     CheckConstraint,
@@ -33,6 +34,7 @@ class File(Base):
         nullable=False
     )
     content_type = Column(String)
+    size = Column(Integer, nullable=False)
     nonce = Column(LargeBinary, nullable=False)
     tag = Column(LargeBinary, nullable=False)
     encrypted_aes_key = Column(LargeBinary, nullable=False)

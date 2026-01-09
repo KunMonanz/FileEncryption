@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from io import BytesIO
 
-from crud.file_crud import upload_file_crud
+from crud.file_crud import update_file_last_decrypted_at, upload_file_crud
 from crud.file_crud import get_file_by_id, upload_file_crud, get_files_by_owner_id
 from crud.users_crud import compare_user_password, search_for_user_username
 
@@ -29,12 +29,13 @@ from schemas.files_schema import (
     FileDecryptSchema,
     FileGetResponseSchema
 )
+from utils import UploadedFileData, read_validate_file
 
 router = APIRouter(prefix="/api/v1/files")
 
 
 @router.get("/", response_model=list[FileGetResponseSchema])
-def get_files(
+def get_all_files(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -45,84 +46,79 @@ def get_files(
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    current_user = search_for_user_username(
-        current_user[0],
-        db
-    )
-
-    return get_files_by_owner_id(current_user.id, db)  # type: ignore
-
-
-@router.post("/upload")
-def upload_file(
-    file: UploadFile = FastAPIFile(...),
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Uploads a file:
-    - Encrypts the file with a random AES key (DEK)
-    - Encrypts the AES key with the user's RSA public key
-    - Stores encrypted file, AES key, nonce, tag, and metadata in DB
-    """
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    current_user = search_for_user_username(
+    db_user = search_for_user_username(
         current_user["username"],
         db
     )
 
-    file_bytes = file.file.read()
-    filename = file.filename
-    content_type = file.content_type
+    file = get_files_by_owner_id(db_user.id, db)  # type: ignore
+
+    return [
+        FileGetResponseSchema.from_bytes(
+            filename=file.filename,  # type: ignore
+            content_type=file.content_type,  # type: ignore
+            size_bytes=file.size,  # type: ignore
+            id=file.id,  # type: ignore
+            last_decrypted_at=file.last_decrypted_at  # type: ignore
+        )
+        for file in file
+    ]
+
+
+@router.post("/upload/")
+async def upload_file(
+    file: UploadedFileData = Depends(read_validate_file),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_user = search_for_user_username(
+        current_user["username"],
+        db
+    )
 
     aes_key = get_random_bytes(32)
     cipher_aes = AES.new(aes_key, AES.MODE_EAX)
-    ciphertext, tag = cipher_aes.encrypt_and_digest(file_bytes)
+    ciphertext, tag = cipher_aes.encrypt_and_digest(file.data)
 
-    public_key = RSA.import_key(current_user.public_key)
-    cipher_rsa = PKCS1_OAEP.new(public_key)
-    encrypted_aes_key = cipher_rsa.encrypt(aes_key)
+    public_key = RSA.import_key(db_user.public_key)
+    encrypted_aes_key = PKCS1_OAEP.new(public_key).encrypt(aes_key)
 
-    file = upload_file_crud(
-        filename=filename,
-        content_type=content_type,
+    file_create = upload_file_crud(
+        filename=file.filename,
+        content_type=file.content_type,
         encrypted_aes_key=encrypted_aes_key,
         aes_nonce=cipher_aes.nonce,
         tag=tag,
         ciphertext=ciphertext,
-        owner_id=current_user.id,
+        owner_id=db_user.id,
+        size=file.size,
         db=db
     )
 
-    if not file:
-        raise HTTPException(
-            detail="File upload failed",
-            status_code=500
-        )
+    if not file_create:
+        raise HTTPException(500, "File upload failed")
 
     return {
-        "file_id": str(file.id),
-        "filename": filename,
+        "file_id": str(file_create.id),
+        "filename": file_create.filename,
         "message": "File uploaded and encrypted successfully"
     }
 
 
-@router.get("/decrypt/")
+@router.get("/decrypt/{file_id}")
 def decrypt_file(
+    file_id: str,
     file_decrypt_request: FileDecryptSchema,
     current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
 
-    current_user = search_for_user_username(
+    db_user = search_for_user_username(
         current_user["username"],
         db
     )
 
-    file = get_file_by_id(file_decrypt_request.file_id, db)
+    file = get_file_by_id(file_id, db)
 
     if not file:
         raise HTTPException(
@@ -130,13 +126,13 @@ def decrypt_file(
             status_code=404
         )
 
-    if file.owner_id != current_user.id:  # type: ignore
+    if file.owner_id != db_user.id:  # type: ignore
         raise HTTPException(
             status_code=403,
             detail="Not your file"
         )
 
-    user = current_user
+    user = db_user
 
     password_verify = compare_user_password(
         user.auth_salt,
@@ -179,6 +175,8 @@ def decrypt_file(
         file.content,
         file.tag
     )
+
+    update_file_last_decrypted_at(file, db)
 
     return StreamingResponse(
         BytesIO(plaintext),
