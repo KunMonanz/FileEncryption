@@ -167,7 +167,8 @@ def login(
 
 @router.post("/password/change")
 def change_password(
-    change_password_request: ChangePasswordSchema, current_user=Depends(get_current_user),
+    change_password_request: ChangePasswordSchema,
+    current_user=Depends(get_current_user),
     db=Depends(get_db)
 ):
     user = search_for_user_username(current_user["username"], db)

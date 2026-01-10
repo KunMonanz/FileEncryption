@@ -6,9 +6,7 @@ from Crypto.Random import get_random_bytes
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
-    UploadFile,
-    File as FastAPIFile
+    HTTPException
 )
 from fastapi.responses import StreamingResponse
 

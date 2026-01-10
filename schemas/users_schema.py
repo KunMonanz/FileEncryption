@@ -13,6 +13,7 @@ class UserLoginSchema(BaseModel):
 
 class UserResponseSchema(BaseModel):
     username: str
+    role: str
 
     class Config:
         from_attributes = True
