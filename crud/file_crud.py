@@ -54,3 +54,16 @@ def update_file_last_decrypted_at(file: File, db: Session) -> None:
     except Exception as e:
         db.rollback()
         print(f"Exception: {e}")
+
+
+def get_total_storage(db: Session) -> int:
+    return db.query(func.sum(File.size)).scalar() or 0
+
+
+def get_user_storage_used(db: Session, user_id: str) -> int:
+    return (
+        db.query(func.sum(File.size))
+        .filter(File.owner_id == user_id)
+        .scalar()
+        or 0
+    )

@@ -1,3 +1,4 @@
+from typing import Sequence
 import uuid
 from models.user_model import User
 from sqlalchemy.orm import Session
@@ -103,3 +104,21 @@ def update_login_time(user: User, db: Session) -> None:
     except Exception as e:
         db.rollback()
         print(f"Exception: {e}")
+
+
+def get_number_of_users_crud(db: Session) -> int:
+    try:
+        count = db.query(func.count(User.id)).scalar()
+        return count if count is not None else 0
+    except Exception as e:
+        print(f"Exception: {e}")
+        return 0
+
+
+def get_all_users(db: Session) -> Sequence[User]:
+    try:
+        users = db.query(User).all()
+        return users
+    except Exception as e:
+        print(f"Exception: {e}")
+        return []

@@ -6,6 +6,7 @@ from Crypto.Random import get_random_bytes
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from crud.file_crud import get_user_storage_used
 from schemas.users_schema import (
     ChangePasswordSchema,
     DecryptPrivateKeySchema,
@@ -24,6 +25,7 @@ from crud.users_crud import (
 from encryption import password_hash
 from database import get_db
 from auth import create_access_token, get_current_user
+from utils import human_readable_size
 
 
 router = APIRouter(prefix="/api/v1/accounts")
@@ -118,49 +120,49 @@ def login(
     update_login_time(user, db)
 
     return {
-        "message": f"Welcome back {user.username}",
+        "message": f"Welcome {user.username}",
         "access_token": token,
         "token_type": "bearer"
     }
 
 
-@router.get("/private-key/decrypt")
-def private_key_decryption(
-    private_key_request: DecryptPrivateKeySchema,
-    current_user=Depends(get_current_user),
-    db=Depends(get_db)
-):
+# @router.get("/private-key/decrypt")
+# def private_key_decryption(
+#     private_key_request: DecryptPrivateKeySchema,
+#     current_user=Depends(get_current_user),
+#     db=Depends(get_db)
+# ):
 
-    user = search_for_user_username(current_user["username"], db)
-    if not user:
-        raise HTTPException(detail=USER_DOES_NOT_EXIST, status_code=422)
+#     user = search_for_user_username(current_user["username"], db)
+#     if not user:
+#         raise HTTPException(detail=USER_DOES_NOT_EXIST, status_code=422)
 
-    password_verify = compare_user_password(
-        user.auth_salt,  # type: ignore
-        private_key_request.password,
-        user.hashed_password  # type: ignore
-    )
+#     password_verify = compare_user_password(
+#         user.auth_salt,  # type: ignore
+#         private_key_request.password,
+#         user.hashed_password  # type: ignore
+#     )
 
-    if not password_verify:
-        raise HTTPException(detail="Incorrect password", status_code=401)
+#     if not password_verify:
+#         raise HTTPException(detail="Incorrect password", status_code=401)
 
-    kek = PBKDF2(
-        private_key_request.password,
-        user.crypto_salt,  # type: ignore
-        dkLen=32,
-        count=300_000
-    )
-    cipher = AES.new(
-        kek,
-        AES.MODE_EAX,
-        nonce=user.private_key_nonce  # type: ignore
-    )  # type: ignore
-    private_key = cipher.decrypt_and_verify(
-        user.encrypted_private_key,
-        user.private_key_tag
-    )
+#     kek = PBKDF2(
+#         private_key_request.password,
+#         user.crypto_salt,  # type: ignore
+#         dkLen=32,
+#         count=300_000
+#     )
+#     cipher = AES.new(
+#         kek,
+#         AES.MODE_EAX,
+#         nonce=user.private_key_nonce  # type: ignore
+#     )  # type: ignore
+#     private_key = cipher.decrypt_and_verify(
+#         user.encrypted_private_key,
+#         user.private_key_tag
+#     )
 
-    return {"private_key": private_key[:50].hex()+"..."}
+#     return {"private_key": private_key[:50].hex()+"..."}
 
 
 @router.post("/password/change")
@@ -226,3 +228,16 @@ def change_password(
     )
 
     return {"message": "Password changed successfully"}
+
+
+@router.get("/total-storage-used")
+def get_storage_used(
+    current_user=Depends(get_current_user),
+    db=Depends(get_db)
+):
+    user = search_for_user_username(current_user["username"], db)
+    storage_used = get_user_storage_used(db, user.id)
+
+    return {
+        "storage used": human_readable_size(storage_used)
+    }

@@ -24,12 +24,13 @@ from auth import get_current_user
 
 from database import get_db
 
+from dependencies import UploadedFileData, read_validate_file
 from schemas.files_schema import (
     FileDecryptSchema,
     FileDecryptSchema,
     FileGetResponseSchema
 )
-from utils import UploadedFileData, read_validate_file
+
 
 router = APIRouter(prefix="/api/v1/files")
 
